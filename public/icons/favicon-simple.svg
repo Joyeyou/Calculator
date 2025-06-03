@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆形 -->
+  <circle cx="256" cy="256" r="248" fill="#EFF6FF" stroke="#3B82F6" stroke-width="16"/>
+  
+  <!-- 简化的云朵 -->
+  <path d="M124 220C148 180 180 180 232 160C284 160 332 180 388 220C420 240 420 280 388 300H124C92 280 92 240 124 220Z" fill="#93C5FD" stroke="#3B82F6" stroke-width="8" stroke-linejoin="round"/>
+  
+  <!-- 简化的防护网 - 只保留水平线 -->
+  <line x1="124" y1="260" x2="388" y2="260" stroke="#2563EB" stroke-width="10" stroke-dasharray="24 12"/>
+  
+  <!-- 简化的冰雹 - 只保留一个主要的 -->
+  <circle cx="256" cy="350" r="40" fill="#BFDBFE" stroke="#3B82F6" stroke-width="6"/>
+</svg> 

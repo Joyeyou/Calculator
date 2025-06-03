@@ -283,9 +283,21 @@ export default function AdvancedHailNetCalculatorPage() {
             </CardFooter>
           </Card>
           
-          <div className="text-center text-xs text-gray-500">
-            <p>© 2025 防冰雹网计算器 | 出口版 | 内部工具</p>
-            <p className="mt-1">忘记密码请联系管理员</p>
+          <div className="text-center space-y-2">
+            <Link href="/">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-1"
+              >
+                <ArrowLeftIcon className="h-4 w-4" />
+                <span>返回首页</span>
+              </Button>
+            </Link>
+            <div className="text-xs text-gray-500">
+              <p>© 2025 防冰雹网计算器 | 出口版 | 内部工具</p>
+              <p className="mt-1">忘记密码请联系管理员</p>
+            </div>
           </div>
         </div>
       </main>
@@ -299,6 +311,16 @@ export default function AdvancedHailNetCalculatorPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="border-blue-500 text-blue-700 px-4 py-1">专业版</Badge>
+            <Link href="/">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-1"
+              >
+                <ArrowLeftIcon className="h-4 w-4" />
+                <span>返回首页</span>
+              </Button>
+            </Link>
           </div>
           <Button 
             variant="ghost" 
