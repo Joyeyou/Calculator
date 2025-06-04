@@ -1,8 +1,12 @@
 import "@/styles/globals.css";
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "sonner";
+
+export const viewport: Viewport = {
+	themeColor: "#3B82F6",
+};
 
 export const metadata: Metadata = {
 	title: "防冰雹网计算器 - 出口版",
@@ -32,7 +36,6 @@ export const metadata: Metadata = {
 	applicationName: "防冰雹网计算器",
 	keywords: ["防冰雹网", "计算器", "农业", "出口版", "冰雹防护"],
 	authors: [{ name: "防冰雹解决方案团队" }],
-	themeColor: "#3B82F6",
 };
 
 const geist = Geist({

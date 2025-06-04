@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAdvancedHailNetCalculatorStore } from '@/store/advancedHailNetCalculator'
+import { useAuthStore } from '@/store/authStore'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ArrowLeftIcon, RefreshCcw, CloudSun, Leaf, BarChart3, Download, Lock, Shield, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { Captcha } from '@/components/ui/captcha'
 
 /**
  * @description 自定义本地存储钩子函数，用于保存密码验证状态
@@ -54,14 +56,24 @@ const useLocalStorage = <T,>(key: string, initialValue: T): [T, (value: T | ((va
 export default function AdvancedHailNetCalculatorPage() {
   const [isLoading, setIsLoading] = useState(true)
   const calculator = useAdvancedHailNetCalculatorStore()
-  // 密码保护状态
-  const [isAuthenticated, setIsAuthenticated] = useLocalStorage('hailnet-auth', false)
+  
+  // 使用新的认证系统
+  const auth = useAuthStore()
   const [password, setPassword] = useState('')
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
-  const [loginAttempt, setLoginAttempt] = useState(0)
+  const [captchaVerified, setCaptchaVerified] = useState(false)
+  const [captchaRefreshTrigger, setCaptchaRefreshTrigger] = useState(0)
   
-  // 设置访问密码，实际生产环境可以使用更安全的方式存储密码
-  const CORRECT_PASSWORD = 'HailNet2025'
+  // 初始化认证系统并检查会话有效性
+  useEffect(() => {
+    auth.initializeAuth()
+    // 定期验证会话有效性，防止会话过期后继续使用
+    const sessionInterval = setInterval(() => {
+      auth.validateSession()
+    }, 60000) // 每分钟检查一次
+    
+    return () => clearInterval(sessionInterval)
+  }, [auth])
   
   // 初始计算
   useEffect(() => {
@@ -75,25 +87,40 @@ export default function AdvancedHailNetCalculatorPage() {
   
   // 处理密码提交
   const handlePasswordSubmit = () => {
-    if (password === CORRECT_PASSWORD) {
-      setIsAuthenticated(true)
-      toast.success('验证成功，欢迎使用高级计算器')
-    } else {
-      setLoginAttempt(prev => prev + 1)
-      setPassword('')
-      toast.error('密码错误，请重试')
-      
-      // 多次尝试失败后的提示
-      if (loginAttempt >= 2) {
-        toast.error('多次尝试失败，如忘记密码请联系管理员')
-      }
+    if (!captchaVerified) {
+      toast.error('请先完成验证码验证')
+      return
     }
+    
+    const success = auth.login(password)
+    if (success) {
+      toast.success('验证成功，欢迎使用高级计算器')
+    }
+    setPassword('')
+    // 重置验证码
+    setCaptchaRefreshTrigger(prev => prev + 1)
+    setCaptchaVerified(false)
   }
   
   // 处理注销
   const handleLogout = () => {
-    setIsAuthenticated(false)
+    auth.logout()
     toast.info('已注销登录')
+  }
+  
+  // 计算会话剩余时间
+  const getSessionTimeRemaining = () => {
+    if (!auth.isAuthenticated) return null
+    
+    const elapsed = Date.now() - auth.sessionStartTime
+    const remaining = auth.sessionDuration - elapsed
+    
+    if (remaining <= 0) return '会话已过期'
+    
+    const hours = Math.floor(remaining / (60 * 60 * 1000))
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000))
+    
+    return hours + '小时' + minutes + '分钟'
   }
   
   // 格式化价格显示，改为美元，添加空值检查
@@ -213,7 +240,7 @@ export default function AdvancedHailNetCalculatorPage() {
   }
   
   // 密码登录页面
-  if (!isAuthenticated) {
+  if (!auth.isAuthenticated) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-green-50 p-4 md:p-8">
         <div className="w-full max-w-md space-y-8">
@@ -250,8 +277,9 @@ export default function AdvancedHailNetCalculatorPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="请输入访问密码"
                     className="pr-10"
+                    disabled={auth.isLocked()}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'Enter' && !auth.isLocked() && captchaVerified) {
                         handlePasswordSubmit();
                       }
                     }}
@@ -260,10 +288,42 @@ export default function AdvancedHailNetCalculatorPage() {
                     type="button"
                     onClick={() => setIsPasswordVisible(!isPasswordVisible)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    disabled={auth.isLocked()}
                   >
                     {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+              </div>
+              
+              {/* 验证码 */}
+              {!auth.isLocked() && (
+                <Captcha 
+                  onVerify={setCaptchaVerified} 
+                  refreshTrigger={captchaRefreshTrigger}
+                />
+              )}
+              
+              {/* 安全状态显示 */}
+              <div className="space-y-2">
+                {auth.isLocked() && (
+                  <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-red-500" />
+                    <div>
+                      <p className="font-medium">账户暂时锁定</p>
+                      <p>由于多次尝试失败，账户已被锁定。请在<span>{Math.ceil(auth.getRemainingLockTime() / 60000)}</span>分钟后重试。</p>
+                    </div>
+                  </div>
+                )}
+                
+                {!auth.isLocked() && auth.loginAttempts > 0 && (
+                  <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-700 flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-amber-500" />
+                    <div>
+                      <p>已尝试 <span>{auth.loginAttempts}</span> 次，还剩 <span>{auth.maxAttempts - auth.loginAttempts}</span> 次机会</p>
+                      <p className="text-xs mt-1">连续<span>{auth.maxAttempts}</span>次失败将锁定账户15分钟</p>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="flex justify-end items-center">
@@ -277,8 +337,9 @@ export default function AdvancedHailNetCalculatorPage() {
               <Button 
                 onClick={handlePasswordSubmit} 
                 className="w-full bg-blue-600 hover:bg-blue-700"
+                disabled={auth.isLocked()}
               >
-                验证密码
+                {auth.isLocked() ? '账户已锁定' : '验证密码'}
               </Button>
             </CardFooter>
           </Card>
@@ -322,15 +383,21 @@ export default function AdvancedHailNetCalculatorPage() {
               </Button>
             </Link>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleLogout}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
-          >
-            <Lock className="h-3 w-3" />
-            <span>注销</span>
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* 会话状态显示 */}
+            <div className="text-xs text-gray-600">
+              会话剩余: {getSessionTimeRemaining()}
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleLogout}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
+            >
+              <Lock className="h-3 w-3" />
+              <span>注销</span>
+            </Button>
+          </div>
         </div>
         
         {/* 标题 */}
