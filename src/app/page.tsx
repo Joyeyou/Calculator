@@ -77,10 +77,16 @@ export default function HomePage() {
                 <CloudLightning className="h-6 w-6 text-amber-500" />
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col gap-2">
               <Link href="/advanced" className="w-full">
                 <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                  <span>打开计算器</span>
+                  <span>高级计算器 (出口版)</span>
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/basic" className="w-full">
+                <Button variant="outline" className="w-full border-green-500 text-green-700 hover:bg-green-50">
+                  <span>基础计算器 (中文版)</span>
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>

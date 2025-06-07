@@ -161,81 +161,330 @@ export default function AdvancedHailNetCalculatorPage() {
     toast.success('已重置计算器')
   }
   
-  // 模拟导出PDF
-  const handleExportPDF = () => {
+  // 生成专业PDF报价单
+  const handleExportPDF = async () => {
     toast.success('正在生成PDF报价清单...')
     
-    // 创建文件名（包含当前日期和网布型号）
-    const currentDate = new Date().toISOString().split('T')[0] // YYYY-MM-DD格式
-    const netTypeName = calculator.netType === 'T60' ? 'T60' : calculator.netType === 'T90' ? 'T90+' : 'L50'
-    const fileName = `防冰雹网报价单_${netTypeName}_${currentDate}.pdf`
-    
-    // 模拟报表内容
-    const reportContent = {
-      标题: "防冰雹网材料清单",
-      日期: currentDate,
-      网布型号: netTypeName + " - " + (calculator.getNetTypeDescription ? calculator.getNetTypeDescription(calculator.netType) : ''),
-      计算模式: calculator.calculationMode === 'fuzzy' ? '模糊估算模式' : '精确计算模式',
-      农场面积: calculator.farmAreaHa + " 公顷",
-      网布基础面积: formatArea(calculator.totalArea) + " ㎡",
-      网布实际面积: formatArea(calculator.actualNetArea) + " ㎡ (×1.155)",
-      网布单价: formatPrice(calculator.pricePerUnit) + "/㎡",
-      网布总价: formatPrice(calculator.netCost),
-      配件清单: [
-        { 名称: "Net Clips", 数量: calculator.netClipsCount, 单价: "$0.10", 总价: formatPrice(calculator.netClipsCount * 0.10) },
-        { 名称: "Bungee Hooks", 数量: calculator.bungeeHooksCount, 单价: "$0.10", 总价: formatPrice(calculator.bungeeHooksCount * 0.10) },
-        { 名称: "Bungee Cord", 数量: calculator.bungeeCordCount, 单价: "$0.38", 总价: formatPrice(calculator.bungeeCordCount * 0.38) }
-      ],
-      配件总价: formatPrice(calculator.accessoriesCost),
-      总计: formatPrice(calculator.totalPrice)
-    }
-    
-    // 如果是豪华型配件，添加额外配件到清单
-    if (calculator.accessoryType === 'luxury') {
-      reportContent.配件清单.push(
-        { 名称: "Wire Clips", 数量: calculator.wireClipsCount, 单价: "$0.10", 总价: formatPrice(calculator.wireClipsCount * 0.10) },
-        { 名称: "Net Connectors", 数量: calculator.netConnectorsCount, 单价: "$0.35", 总价: formatPrice(calculator.netConnectorsCount * 0.35) }
-      )
-    }
-    
-    // 创建一个看不见的 a 标签来触发下载
     try {
-      // 将内容转换为 JSON 字符串
-      const jsonString = JSON.stringify(reportContent, null, 2);
-      // 创建 Blob 对象
-      const blob = new Blob([jsonString], { type: 'application/json' });
-      // 创建 URL
-      const url = URL.createObjectURL(blob);
+      // 动态导入jsPDF和AutoTable
+      const { default: jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+
+      // 创建PDF文档
+      const doc = new jsPDF() as any // 使用any类型以支持lastAutoTable属性
       
-      // 创建临时下载链接
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName.replace('.pdf', '.json'); // 由于无法生成真正的PDF，暂时使用JSON格式
-      link.style.display = 'none';
+      // 获取当前数据
+      const currentDate = new Date().toISOString().split('T')[0] // YYYY-MM-DD格式
+      const netTypeName = calculator.netType === 'T60' ? 'T60' : calculator.netType === 'T90' ? 'T90+' : 'L50'
+      const customerNameSafe = calculator.customerName.trim() || 'Unknown_Customer'
+      const fileName = `Internal_Quote_${customerNameSafe.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${netTypeName}_${currentDate}.pdf`
       
-      // 添加到文档中并触发点击
-      document.body.appendChild(link);
-      link.click();
+      // 设置字体支持 - 解决中文显示问题
+      doc.setFont('helvetica', 'normal')
       
-      // 清理
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-        document.body.removeChild(link);
+      // 中文字符编码处理函数
+      const encodeText = (text: string) => {
+        try {
+          // 对中文字符进行特殊处理
+          return text
+        } catch (e) {
+          return text
+        }
+      }
+      
+      // === 内部警示横幅 ===
+      doc.setFillColor(220, 53, 69) // 红色背景
+      doc.rect(5, 5, 200, 15, 'F') // 加大警示条尺寸
+      doc.setFontSize(11)
+      doc.setTextColor(255, 255, 255) // 白色文字
+      doc.text('⚠ INTERNAL USE ONLY - CONFIDENTIAL PRICING ⚠', 105, 14, { align: 'center' })
+      
+      // === 页面标题 ===
+      doc.setFont('helvetica', 'bold') // 使用粗体
+      doc.setFontSize(22)
+      doc.setTextColor(25, 118, 210) // 蓝色标题
+      doc.text('HAIL NET MATERIAL QUOTATION', 20, 35)
+      
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(16)
+      doc.setTextColor(220, 53, 69) // 红色强调
+      doc.text('[INTERNAL ASSESSMENT]', 150, 35)
+      
+      // 副标题
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(12)
+      doc.setTextColor(100, 100, 100)
+      doc.text('Professional Agricultural Protection Solution', 20, 45)
+      
+      // 客户信息区域
+      doc.setFillColor(240, 248, 255) // 浅蓝色背景
+      doc.rect(15, 50, 180, 15, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(25, 118, 210)
+      doc.text(`Customer: ${calculator.customerName || 'Not Specified'}`, 20, 60)
+      
+      // === 公司信息区域 ===
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(60, 60, 60)
+      doc.text(`Quote Date: ${currentDate}`, 20, 72)
+      doc.text(`Net Type: ${netTypeName} - ${calculator.getNetTypeDescription ? calculator.getNetTypeDescription(calculator.netType) : ''}`, 20, 78)
+      doc.text(`Calculation Mode: ${calculator.calculationMode === 'fuzzy' ? 'Area Estimation' : 'Precise Calculation'}`, 20, 84)
+      
+      // === 项目概况 ===
+      let yPosition = 95
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(25, 118, 210)
+      doc.text('PROJECT OVERVIEW', 20, yPosition)
+      
+      yPosition += 10
+      doc.setFontSize(10)
+      doc.setTextColor(0, 0, 0)
+      
+      // 项目信息表格
+      const projectData = []
+      
+      if (calculator.calculationMode === 'fuzzy') {
+        projectData.push(
+          ['Farm Area', `${calculator.farmAreaHa} hectares`],
+          ['Base Coverage Area', `${formatArea(calculator.totalArea)} m²`],
+          ['Actual Net Area (x1.155)', `${formatArea(calculator.actualNetArea)} m²`],
+          ['Price Margin', `${calculator.priceMargin === 'margin30' ? '30%' : calculator.priceMargin === 'margin40' ? '40%' : '50%'} markup`],
+          ['Accessory Package', `${calculator.accessoryType === 'economy' ? 'Economy' : 'Luxury'} Package`]
+        )
+      } else {
+        projectData.push(
+          ['Row Count', `${calculator.rowCount} rows`],
+          ['Row Length', `${calculator.rowLength} m`],
+          ['Row Spacing', `${calculator.rowSpacing} m`],
+          ['Net Width', `${formatLength(calculator.netWidth)} m`],
+          ['Net Length', `${formatLength(calculator.netLength)} m`],
+          ['Total Area', `${formatArea(calculator.totalArea)} m²`],
+          ['Price Margin', `${calculator.priceMargin === 'margin30' ? '30%' : calculator.priceMargin === 'margin40' ? '40%' : '50%'} markup`],
+          ['Accessory Package', `${calculator.accessoryType === 'economy' ? 'Economy' : 'Luxury'} Package`]
+        )
+      }
+      
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Project Parameter', 'Value']],
+        body: projectData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [25, 118, 210], 
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        styles: { 
+          fontSize: 9,
+          font: 'helvetica'
+        },
+        columnStyles: {
+          0: { cellWidth: 70, fontStyle: 'bold' },
+          1: { cellWidth: 90 }
+        }
+      })
+      
+      // === 材料清单 ===
+      yPosition = doc.lastAutoTable.finalY + 20
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(25, 118, 210)
+      doc.text('MATERIAL LIST', 20, yPosition)
+      
+      // 网布信息
+      yPosition += 15
+      const netData = [
+        [
+          netTypeName,
+          calculator.rollsNeeded ? `${calculator.rollsNeeded} rolls` : 'Custom',
+          formatPrice(calculator.pricePerUnit) + '/m²',
+          formatArea(calculator.actualNetArea) + ' m²',
+          formatPrice(calculator.netCost)
+        ]
+      ]
+      
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Net Type', 'Quantity', 'Unit Price', 'Coverage Area', 'Subtotal']],
+        body: netData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [76, 175, 80], 
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        styles: { 
+          fontSize: 9,
+          font: 'helvetica'
+        }
+      })
+      
+      // 配件清单
+      yPosition = doc.lastAutoTable.finalY + 15
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(25, 118, 210)
+      doc.text('ACCESSORIES', 20, yPosition)
+      
+      yPosition += 10
+      const accessoryData = [
+        ['Net Clips', calculator.netClipsCount.toLocaleString(), '$0.10', formatPrice(calculator.netClipsCount * 0.10)],
+        ['Bungee Hooks', calculator.bungeeHooksCount.toLocaleString(), '$0.10', formatPrice(calculator.bungeeHooksCount * 0.10)],
+        ['Bungee Cord', calculator.bungeeCordCount.toLocaleString(), '$0.38', formatPrice(calculator.bungeeCordCount * 0.38)]
+      ]
+      
+      // 如果是豪华型配件，添加额外配件
+      if (calculator.accessoryType === 'luxury') {
+        accessoryData.push(
+          ['Wire Clips', calculator.wireClipsCount.toLocaleString(), '$0.10', formatPrice(calculator.wireClipsCount * 0.10)],
+          ['Net Connectors', calculator.netConnectorsCount.toLocaleString(), '$0.35', formatPrice(calculator.netConnectorsCount * 0.35)]
+        )
+      }
+      
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Accessory Item', 'Quantity', 'Unit Price', 'Subtotal']],
+        body: accessoryData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [255, 152, 0], 
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        styles: { 
+          fontSize: 9,
+          font: 'helvetica'
+        }
+      })
+      
+            // === 成本汇总 ===
+      yPosition = doc.lastAutoTable.finalY + 15
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(25, 118, 210)
+      doc.text('COST SUMMARY', 20, yPosition)
+      
+      yPosition += 10
+      const costData = [
+        ['Net Cost', formatPrice(calculator.netCost)],
+        ['Accessories Cost', formatPrice(calculator.accessoriesCost)],
+        ['Subtotal', formatPrice(calculator.netCost + calculator.accessoriesCost)]
+      ]
+      
+      // 添加折扣信息（如果有）
+      if (calculator.bulkDiscount > 0) {
+        costData.push(
+          ['Bulk Discount', `-${formatPrice(calculator.discountAmount)} (${(calculator.bulkDiscount * 100).toFixed(1)}%)`]
+        )
+      }
+      
+      costData.push(['TOTAL AMOUNT', formatPrice(calculator.totalPrice)])
+      
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Cost Item', 'Amount']],
+        body: costData,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [96, 125, 139], 
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        styles: { 
+          fontSize: 10,
+          font: 'helvetica'
+        },
+        bodyStyles: { fontStyle: 'normal' },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        didParseCell: (data) => {
+          // 突出显示总计行
+          if (data.row.index === costData.length - 1) {
+            data.cell.styles.fillColor = [25, 118, 210]
+            data.cell.styles.textColor = [255, 255, 255]
+            data.cell.styles.fontStyle = 'bold'
+            data.cell.styles.fontSize = 12
+          }
+        }
+      })
+      
+      // === 如果是模糊模式，添加每公顷成本分析 ===
+      if (calculator.calculationMode === 'fuzzy') {
+        yPosition = doc.lastAutoTable.finalY + 15
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(12)
+        doc.setTextColor(25, 118, 210)
+        doc.text('PER HECTARE ANALYSIS', 20, yPosition)
         
-        toast.success(`报价清单已导出：${fileName.replace('.pdf', '.json')}`, {
-          duration: 3000,
-          description: "导出的JSON文件可以用于其他应用程序处理",
-          action: {
-            label: "确定",
-            onClick: () => {
-              toast.info('导出成功！')
-            },
+        yPosition += 10
+        const perHaData = [
+          ['Net Cost per Hectare', formatPrice(calculator.perHaNetCost)],
+          ['Accessories Cost per Hectare', formatPrice(calculator.perHaAccessoryCost)],
+          ['Total Cost per Hectare', formatPrice(calculator.perHaCost)]
+        ]
+        
+        autoTable(doc, {
+          startY: yPosition,
+          head: [['Cost Analysis', 'Amount per Hectare']],
+          body: perHaData,
+          theme: 'grid',
+          headStyles: { 
+            fillColor: [139, 195, 74], 
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 10
           },
-        });
-      }, 100);
+          styles: { 
+            fontSize: 9,
+            font: 'helvetica'
+          }
+        })
+      }
+      
+      // === 页脚警示和信息 ===
+      const pageHeight = doc.internal.pageSize.height
+      
+      // 底部警示横幅
+      doc.setFillColor(255, 193, 7) // 黄色背景
+      doc.rect(5, pageHeight - 35, 200, 10, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0) // 黑色文字
+      doc.text('⚠ WARNING: This document contains confidential pricing for internal evaluation only ⚠', 105, pageHeight - 29, { align: 'center' })
+      
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(100, 100, 100)
+      doc.text('This quotation is valid for 30 days from the date of issue.', 20, pageHeight - 20)
+      doc.text('Professional Agricultural Hail Protection Solutions', 20, pageHeight - 15)
+      doc.text(`Generated on ${new Date().toLocaleString('en-US')}`, 20, pageHeight - 10)
+      doc.text('Export Version - Internal Assessment Tool', 20, pageHeight - 5)
+      
+      // 保存PDF文件
+      doc.save(fileName)
+      
+      toast.success(`PDF报价单已生成：${fileName}`, {
+        duration: 4000,
+        description: "专业格式的PDF文件已下载到您的设备",
+        action: {
+          label: "确定",
+          onClick: () => {
+            toast.info('PDF导出成功！')
+          },
+        },
+      })
+      
     } catch (error) {
-      console.error('导出失败:', error);
-      toast.error('导出失败，请稍后再试');
+      console.error('PDF生成失败:', error)
+      toast.error('PDF生成失败，请稍后再试', {
+        description: '如果问题持续存在，请联系技术支持'
+      })
     }
   }
   
@@ -473,6 +722,28 @@ export default function AdvancedHailNetCalculatorPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* 客户名称输入 */}
+                <div className="space-y-2">
+                  <Label htmlFor="customerName" className="flex items-center gap-2">
+                    <span>客户名称</span>
+                    <Badge variant="secondary" className="text-xs">内部记录</Badge>
+                  </Label>
+                  <Input
+                    id="customerName"
+                    type="text"
+                    value={calculator.customerName}
+                    onChange={(e) => calculator.setCustomerName(e.target.value)}
+                    placeholder="请输入客户名称（用于PDF报价记录）"
+                    className="focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    此信息将包含在PDF报价单中，仅供内部使用
+                  </p>
+                </div>
+                
+                <Separator />
+                
                 {calculator.calculationMode === 'fuzzy' ? (
                   // 模糊模式参数
                   <div className="space-y-6">

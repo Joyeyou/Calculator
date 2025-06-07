@@ -69,6 +69,9 @@ const haToSquareMeters = (ha: number) => ha * 10000
 
 // 接口定义
 interface AdvancedHailNetCalculatorState {
+  // 客户信息
+  customerName: string // 客户名称
+  
   // 计算模式
   calculationMode: 'fuzzy' | 'precise' // 模糊或精确模式
   
@@ -112,6 +115,7 @@ interface AdvancedHailNetCalculatorState {
   netCost: number
   
   // 方法
+  setCustomerName: (name: string) => void
   setCalculationMode: (mode: 'fuzzy' | 'precise') => void
   setFarmAreaHa: (area: number) => void
   setRowCount: (count: number) => void
@@ -134,6 +138,7 @@ export const useAdvancedHailNetCalculatorStore = create<AdvancedHailNetCalculato
   persist(
     (set, get) => ({
       // 初始值
+      customerName: '', // 客户名称
       calculationMode: 'fuzzy',
       farmAreaHa: 5, // 默认5公顷
       rowCount: 10,
@@ -170,6 +175,10 @@ export const useAdvancedHailNetCalculatorStore = create<AdvancedHailNetCalculato
       netCost: 0,
       
       // 设置方法
+      setCustomerName: (name) => {
+        set({ customerName: name })
+      },
+      
       setCalculationMode: (mode) => {
         set({ calculationMode: mode })
         get().calculate()
